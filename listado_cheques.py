@@ -7,13 +7,17 @@ def main():
     parser = argparse.ArgumentParser(description='Procesar y consultar cheques bancarios.')
     parser.add_argument('archivo_csv', help='Nombre del archivo CSV')
     parser.add_argument('dni_cliente', help='DNI del cliente')
-    parser.add_argument('--salida', choices=['PANTALLA', 'CSV'], default='PANTALLA', help='Salida de datos')
-    parser.add_argument('--tipo_cheque', choices=['EMITIDO', 'DEPOSITADO'], required=True, help='Tipo de cheque')
-    parser.add_argument('--estado_cheque', choices=['pendiente', 'aprobado', 'rechazado'], help='Estado del cheque')
+    parser.add_argument('salida', choices=['PANTALLA', 'CSV'], default='PANTALLA', help='Salida de datos')
+    parser.add_argument('tipo_cheque', choices=['EMITIDO', 'DEPOSITADO'], help='Tipo de cheque')
+    parser.add_argument('--estado_cheque', choices=['PENDIENTE', 'APROBADO', 'RECHAZADO'], help='Estado del cheque')
     parser.add_argument('--fecha_inicio', help='Fecha de inicio (opcional)')
     parser.add_argument('--fecha_fin', help='Fecha de fin (opcional)')
     
     args = parser.parse_args()
+    #Valido que haya 4 ingresos obligatorios.
+    if not args.archivo_csv or not args.dni_cliente or not args.salida or not args.tipo_cheque:
+        print("Error: Debes proporcionar los argumentos obligatorios: archivo_csv, dni_cliente, salida y tipo_cheque.")
+        sys.exit(1)
     
     # Leer datos desde el archivo CSV
     notas = []
@@ -72,13 +76,16 @@ def main():
             print('')
 
     # Validación de DNI
-    if not args.dni_cliente.isdigit() or len(args.dni_cliente) != 8:
+    if not args.dni_cliente.isdigit():
         print("Error: El DNI del cliente debe ser un número de 8 dígitos.")
         sys.exit(1)
     # Filtrar por DNI del cliente
     if not any(fila['DNI'] == args.dni_cliente for fila in notas):
         print("El DNI no está en la base de datos.")
         return sys.exit(1)
+    else: 
+        notas = [fila for fila in notas if fila['DNI'] == args.dni_cliente]
+        
 
     #VERIFICAR CHEQUES REPETIDOS PARA UN MISMO DNI
     numeros_cheque_cuenta = {}  
@@ -90,27 +97,27 @@ def main():
         if numero_cheque in numeros_cheque_cuenta[cuenta]:
             print(f"Error: Número de cheque repetido ({numero_cheque}) en la cuenta {cuenta} para el DNI {args.dni_cliente}.")
             sys.exit(1)
-        numeros_cheque_cuenta[cuenta].add(numero_cheque) 
-
+        numeros_cheque_cuenta[cuenta].add(numero_cheque)  
+          
     # Validación de Tipo de Cheque
     if args.tipo_cheque not in ['EMITIDO', 'DEPOSITADO']:
         print("Error: El tipo de cheque debe ser 'EMITIDO' o 'DEPOSITADO'.")
         sys.exit(1)
     # Filtrar por tipo de cheque (EMITIDO o DEPOSITADO)
     if args.tipo_cheque == 'EMITIDO':
-        notas = [fila for fila in notas if fila['NumeroCuentaOrigen'] == args.dni_cliente]
+        notas = [fila for fila in notas if fila['Tipo'] == args.tipo_cheque]
     else:
-        notas = [fila for fila in notas if fila['NumeroCuentaDestino'] == args.dni_cliente]
+        notas = [fila for fila in notas if fila['Tipo'] == args.tipo_cheque]
 
 
     # FILTRAR Y VALIDAR 
     if args.estado_cheque:
-        if args.estado_cheque not in ['pendiente', 'aprobado', 'rechazado']:
+        if args.estado_cheque not in ['PENDIENTE', 'APROBADO', 'RECHAZADO']:
             print("Error: El estado del cheque debe ser 'pendiente', 'aprobado' o 'rechazado'.")
             sys.exit(1)
         else: notas = [fila for fila in notas if fila['Estado'] == args.estado_cheque]
 
-
+ 
     # Filtrar por rango de fechas (opcional)
     if args.fecha_inicio and args.fecha_fin:
         notas = [fila for fila in notas if fila['FechaOrigen'] >= args.fecha_inicio and fila['FechaPago'] >= args.fecha_fin]           
@@ -144,4 +151,4 @@ if __name__ == "__main__":
 
 
 #COMO EJECUTAR:
-#python listado_cheques.py listado_cheques.csv 12345678 --salida CSV --tipo_cheque EMITIDO --estado_cheque aprobado
+#python listado_cheques.py listado_cheques.csv 1617591371 PANTALLA EMITIDO --estado_cheque APROBADO
