@@ -1,144 +1,147 @@
-import csv
+import argparse
+import datetime
 import sys
+import csv
 
-# Leer datos desde el archivo CSV
-notas = []
-with open('listado_cheques.csv', 'r', newline='') as f:
-    datos = csv.DictReader(f, delimiter=',')
-    for fila in datos:
-        notas.append(fila)
-
-# Funcion para mostrar el csv
-def mostrar_en_columnas(data):
-    if not data:
-        print("No hay datos para mostrar.")
-        return
+def main():
+    parser = argparse.ArgumentParser(description='Procesar y consultar cheques bancarios.')
+    parser.add_argument('archivo_csv', help='Nombre del archivo CSV')
+    parser.add_argument('dni_cliente', help='DNI del cliente')
+    parser.add_argument('--salida', choices=['PANTALLA', 'CSV'], default='PANTALLA', help='Salida de datos')
+    parser.add_argument('--tipo_cheque', choices=['EMITIDO', 'DEPOSITADO'], required=True, help='Tipo de cheque')
+    parser.add_argument('--estado_cheque', choices=['pendiente', 'aprobado', 'rechazado'], help='Estado del cheque')
+    parser.add_argument('--fecha_inicio', help='Fecha de inicio (opcional)')
+    parser.add_argument('--fecha_fin', help='Fecha de fin (opcional)')
     
-    # Obtener los nombres de las columnas
-    nombres_columnas = data[0]
+    args = parser.parse_args()
+    
+    # Leer datos desde el archivo CSV
+    notas = []
+    try:
+        with open(args.archivo_csv, 'r', newline='') as f:
+            datos = csv.DictReader(f, delimiter=',')
+            for fila in datos:
+                notas.append(fila)
+    except FileNotFoundError:
+        print(f"Error: El archivo '{args.archivo_csv}' no existe.")
+        sys.exit(1)
+    
+    def mostrar_en_columnas(notas):
+        if not notas:
+            print("No hay datos para mostrar.")
+            return
 
-    # Inicializar los anchos de las columnas con la longitud de los nombres de las columnas
-    anchos_columnas = {columna: len(columna) for columna in nombres_columnas}
+        # Obtener los nombres de las columnas
+        nombres_columnas = list(notas[0].keys())
 
-    # Calcular los anchos máximos de las columnas
-    for fila in data:
-        for columna, valor in fila.items():
-            anchos_columnas[columna] = max(anchos_columnas[columna], len(str(valor)))
+        # Inicializar los anchos de las columnas con el longitud de los nombres de las columnas
+        anchos_columnas = {columna: len(columna) for columna in nombres_columnas}
 
-    # Imprimir los nombres de las columnas
-    for columna in nombres_columnas:
-        print('{:{width}}'.format(columna, width=anchos_columnas[columna]), '|', end=' ')
-    print('')
+        # Calcular los anchos máximos de las columnas
+        for fila in notas:
+            for columna, valor in fila.items():
+                anchos_columnas[columna] = max(anchos_columnas[columna], len(str(valor)))
 
-    # Imprimir una línea horizontal para separar los nombres de las columnas de los datos
-    for columna in nombres_columnas:
-        print('-' * anchos_columnas[columna], '|', end=' ')
-    print('')
+        # Asegurarse de que las columnas de fecha tengan un ancho mínimo
+        for columna in nombres_columnas:
+            if columna in ['FechaOrigen', 'FechaPago']:
+                anchos_columnas[columna] = max(anchos_columnas[columna], 19)  # Ancho mínimo para fechas con hora y minutos
 
-    # Imprimir las filas de datos
-    for fila in data:
-        for columna, valor in fila.items():
-            print('{:{width}}'.format(valor, width=anchos_columnas[columna]), '|', end=' ')
+        # Imprimir los nombres de las columnas
+        for columna in nombres_columnas:
+            print('{:{width}}'.format(columna, width=anchos_columnas[columna]), '|', end=' ')
         print('')
 
-# Filtrar cheques por estado
-def filtrar_por_estado(data, estado_filtrar=None):
-    if estado_filtrar is not None:
-        resultados_filtrados = [fila for fila in data if fila['Estado'] == estado_filtrar]
-        if resultados_filtrados:
-            mostrar_en_columnas(resultados_filtrados)
-        else:
-            mostrar_en_columnas(data)
-    else:
-        mostrar_en_columnas(data)
+    # Imprimir una línea horizontal para separar los nombres de las columnas de los datos
+        for columna in nombres_columnas:
+            print('-' * anchos_columnas[columna], '|', end=' ')
+        print('')
 
-# Filtrar cheques por DNI
-def segunDni(dni, data):
-    cliente = [fila for fila in data if fila['DNI'] == dni]
-    if cliente:
-        return cliente
-    else:
-        return "El DNI no está en la base de datos."
+        # Imprimir las filas de datos
+        for fila in notas:
+            for columna in nombres_columnas:
+                valor = fila[columna]
+            
+                # Verificar si la columna es una fecha y formatearla en el formato deseado
+                if columna in ['FechaOrigen', 'FechaPago']:
+                    fecha_timestamp = int(valor)
+                    fecha_formateada = datetime.datetime.fromtimestamp(fecha_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    valor = fecha_formateada
+            
+                print('{:{width}}'.format(valor, width=anchos_columnas[columna]), '|', end=' ')
+            print('')
 
-# Funcion ver cheques en consola o csv
-def salidaUsuario():
-    while True:
-        eleccion = input("Elige si quieres ver los cheques en un csv o en la consola: ").lower()
-        if eleccion == 'csv':
-            with open('listado_cheques_filtrado.csv', 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=notas[0].keys(), delimiter=';')
-                writer.writeheader()
-                writer.writerows(notas)
-            print("Se ha guardado el archivo 'listado_cheques_filtrado.csv'.")
-            break   
-        elif eleccion == 'consola':
-            mostrar_en_columnas(notas)
-            break  
-        else:
-            print("Opción no válida. Por favor, selecciona 'csv' o 'consola'.")
+    # Validación de DNI
+    if not args.dni_cliente.isdigit() or len(args.dni_cliente) != 8:
+        print("Error: El DNI del cliente debe ser un número de 8 dígitos.")
+        sys.exit(1)
+    # Filtrar por DNI del cliente
+    if not any(fila['DNI'] == args.dni_cliente for fila in notas):
+        print("El DNI no está en la base de datos.")
+        return sys.exit(1)
+
+    #VERIFICAR CHEQUES REPETIDOS PARA UN MISMO DNI
+    numeros_cheque_cuenta = {}  
+    for fila in notas:
+        numero_cheque = fila['NroCheque']
+        cuenta = fila['NumeroCuentaOrigen'] if args.tipo_cheque == 'EMITIDO' else fila['NumeroCuentaDestino']
+        if cuenta not in numeros_cheque_cuenta:
+            numeros_cheque_cuenta[cuenta] = set()
+        if numero_cheque in numeros_cheque_cuenta[cuenta]:
+            print(f"Error: Número de cheque repetido ({numero_cheque}) en la cuenta {cuenta} para el DNI {args.dni_cliente}.")
+            sys.exit(1)
+        numeros_cheque_cuenta[cuenta].add(numero_cheque) 
+
+    # Validación de Tipo de Cheque
+    if args.tipo_cheque not in ['EMITIDO', 'DEPOSITADO']:
+        print("Error: El tipo de cheque debe ser 'EMITIDO' o 'DEPOSITADO'.")
+        sys.exit(1)
+    # Filtrar por tipo de cheque (EMITIDO o DEPOSITADO)
+    if args.tipo_cheque == 'EMITIDO':
+        notas = [fila for fila in notas if fila['NumeroCuentaOrigen'] == args.dni_cliente]
+    else:
+        notas = [fila for fila in notas if fila['NumeroCuentaDestino'] == args.dni_cliente]
+
+
+    # FILTRAR Y VALIDAR 
+    if args.estado_cheque:
+        if args.estado_cheque not in ['pendiente', 'aprobado', 'rechazado']:
+            print("Error: El estado del cheque debe ser 'pendiente', 'aprobado' o 'rechazado'.")
+            sys.exit(1)
+        else: notas = [fila for fila in notas if fila['Estado'] == args.estado_cheque]
+
+
+    # Filtrar por rango de fechas (opcional)
+    if args.fecha_inicio and args.fecha_fin:
+        notas = [fila for fila in notas if fila['FechaOrigen'] >= args.fecha_inicio and fila['FechaPago'] >= args.fecha_fin]           
+
+
+    # Mostrar o exportar resultados
+    if args.salida == 'CSV':
+        nombre_archivo = f"{args.dni_cliente}_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv"
+        with open(f'{nombre_archivo}', 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=notas[0].keys(), delimiter=',')
+            writer.writeheader()
+            for fila in notas:
+                # Convierto el valor de la fecha en un objeto datetime
+                fecha_origen = datetime.datetime.fromtimestamp(int(fila['FechaOrigen']))
+                fecha_pago = datetime.datetime.fromtimestamp(int(fila['FechaPago']))
+
+                # Escribo en el csv el objeto datetime de la forma AÑO-MES-DIA HORA-MINUTOS
+                fila['FechaOrigen'] = fecha_origen.strftime('%Y-%m-%d %H:%M:%S')
+                fila['FechaPago'] = fecha_pago.strftime('%Y-%m-%d %H:%M:%S')
+
+                writer.writerow(fila)
+                
+        print(f"Se ha guardado el archivo {nombre_archivo}")
+
+    else:
+        print(mostrar_en_columnas(notas))
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Uso: python script.py <DNI>")
-        sys.exit(1)
-
-    elegirDni = sys.argv[1]
-    resultados = segunDni(elegirDni, notas)
-
-    if resultados == "El DNI no está en la base de datos.":
-        print(resultados)
-    else:
-        mostrar_en_columnas(resultados)
-        
-        # Preguntar por el estado de los cheques a mostrar
-        estado_filtrar = input("¿Qué tipo de cheques desea ver (APROBADO, RECHAZADO, PENDIENTE)? ").upper()
-
-        while estado_filtrar not in ['APROBADO', 'RECHAZADO', 'PENDIENTE']:
-            print("Estado no válido. Por favor, seleccione APROBADO, RECHAZADO o PENDIENTE.")
-            estado_filtrar = input("¿Qué tipo de cheques desea ver (APROBADO, RECHAZADO, PENDIENTE)? ").upper()
-            
-        if estado_filtrar in ['APROBADO', 'RECHAZADO', 'PENDIENTE']:
-            notas_filtradas = filtrar_por_estado(resultados, estado_filtrar)
-            salidaUsuario()  # Llama a la función para que el usuario elija la salida
+    main()
 
 
 
-# def entreFechas():
-#     fecha_inicio_str = input("Ingrese la fecha de inicio en formato 'YYYY-MM-DD':")
-#     fecha_fin_str = input("Ingrese la fecha de fin en formato 'YYYY-MM-DD':")
-
-#     registros_en_rango = None  # Declarar la variable antes del bloque try
-
-#     try:
-#         fecha_inicio = pd.to_datetime(fecha_inicio_str, format='%Y-%m-%d')
-#         fecha_fin = pd.to_datetime(fecha_fin_str, format='%Y-%m-%d')
-
-#         # Asegúrate de que las columnas de fecha sean de tipo Timestamp
-#         df['FechaOrigen'] = pd.to_datetime(df['FechaOrigen'], format='%Y-%m-%d')
-#         df['FechaPago'] = pd.to_datetime(df['FechaPago'], format='%Y-%m-%d')
-
-#         registros_en_rango = df[(df['FechaOrigen'] >= fecha_inicio) & (df['FechaOrigen'] <= fecha_fin)]
-
-#         if registros_en_rango is not None:
-#             print("Registros dentro del rango de fechas:")
-#             print(registros_en_rango)
-#     except ValueError:
-#         print("Formato de fecha incorrecto. Use 'YYYY-MM-DD'.")
-
-# # Llama a la función entreFechas
-# entreFechas()
-
-
-
-# def verificarChequeRepetido():
-#     dni = input("Ingrese el número de DNI: ")
-#     numero_cheque = input("Ingrese el número de cheque: ")
-
-#     resultados = df[(df['DNI'] == dni) & (df['NumeroCheque'] == numero_cheque)]
-
-#     if len(resultados) > 1:
-#         print("¡Error! Se encontraron cheques repetidos en la misma cuenta para el DNI proporcionado.")
-#     else:
-#         print("No se encontraron cheques repetidos en la misma cuenta para el DNI proporcionado.")
-
-# verificarChequeRepetido() 
+#COMO EJECUTAR:
+#python listado_cheques.py listado_cheques.csv 12345678 --salida CSV --tipo_cheque EMITIDO --estado_cheque aprobado
